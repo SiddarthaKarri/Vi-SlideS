@@ -1,33 +1,26 @@
-import OpenAI from 'openai';
+import { GoogleGenAI } from '@google/genai';
 import dotenv from 'dotenv';
 // Load environment variables early, in case this service is run independently
 dotenv.config();
 
-const openai = new OpenAI({
-    apiKey: process.env.OPENAI_API_KEY,
+const ai = new GoogleGenAI({
+    apiKey: process.env.GEMINI_API_KEY,
 });
 
 export const analyzeQuestionPrompt = async (question: string) => {
     try {
-        const response = await openai.chat.completions.create({
-            model: "gpt-4o-mini",
-            messages: [
-                { 
-                    role: "system", 
-                    content: "You are a helpful teaching assistant AI. Your job is to analyze student questions, categorize them, and provide a brief dummy answer or complexity score. Output JSON with 'complexity' (number 1-10), 'category' (string), and 'suggestedAnswer' (string)." 
-                },
-                { 
-                    role: "user", 
-                    content: `Please analyze this student question: "${question}"` 
-                }
-            ],
-            response_format: { type: "json_object" }
+        const response = await ai.models.generateContent({
+            model: 'gemini-2.5-flash',
+            contents: `Please analyze this student question: "${question}"`,
+            config: {
+                systemInstruction: "You are a helpful teaching assistant AI. Your job is to analyze student questions, categorize them, and provide a brief dummy answer or complexity score. Output JSON with 'complexity' (number 1-10), 'category' (string), and 'suggestedAnswer' (string).",
+                responseMimeType: "application/json",
+            }
         });
         
-        const result = response.choices[0].message.content;
-        return result ? JSON.parse(result) : null;
+        return response.text ? JSON.parse(response.text) : null;
     } catch (error) {
-        console.error("Error analyzing question via OpenAI:", error);
+        console.error("Error analyzing question via Gemini:", error);
         // Provide a dummy fallback if it fails
         return {
             complexity: 2,

@@ -6,6 +6,7 @@ import { Server } from 'socket.io';
 import connectDB from './config/db';
 import authRoutes from './routes/authRoutes';
 import sessionRoutes from './routes/sessionRoutes';
+import aiRoutes from './routes/ai.routes';
 
 dotenv.config();
 
@@ -27,6 +28,7 @@ connectDB();
 // Routes
 app.use('/api/auth', authRoutes);
 app.use('/api/sessions', sessionRoutes);
+app.use('/api/ai', aiRoutes);
 
 // Socket.io logic
 io.on('connection', (socket) => {

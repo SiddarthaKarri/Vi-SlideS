@@ -34,13 +34,33 @@ app.use('/api/ai', aiRoutes);
 io.on('connection', (socket) => {
     console.log('A user connected:', socket.id);
 
+    let currentRoom: string | null = null;
+
     socket.on('join_session', (sessionCode) => {
         socket.join(sessionCode);
+        currentRoom = sessionCode;
         console.log(`Socket ${socket.id} joined session ${sessionCode}`);
+        
+        const roomSize = io.sockets.adapter.rooms.get(sessionCode)?.size || 0;
+        io.to(sessionCode).emit('member_count', roomSize);
+    });
+
+    socket.on('send_question', (data) => {
+        console.log(`Question received for session ${data.sessionCode}`);
+        io.to(data.sessionCode).emit('receive_question', {
+            id: Date.now().toString(),
+            question: data.question,
+            isAnonymous: data.isAnonymous,
+            timestamp: new Date().toISOString()
+        });
     });
 
     socket.on('disconnect', () => {
         console.log('User disconnected:', socket.id);
+        if (currentRoom) {
+            const roomSize = io.sockets.adapter.rooms.get(currentRoom)?.size || 0;
+            io.to(currentRoom).emit('member_count', roomSize);
+        }
     });
 });
 

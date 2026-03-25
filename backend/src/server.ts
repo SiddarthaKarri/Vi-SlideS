@@ -83,7 +83,7 @@ io.on('connection', (socket) => {
                     question: savedQuestion.question,
                     isAnonymous: savedQuestion.isAnonymous,
                     complexity: savedQuestion.complexity,
-                    timestamp: savedQuestion.createdAt
+                    timestamp: new Date().toISOString()
                 });
             } else {
                 // Strictly return auto-answer directly back to the student who asked

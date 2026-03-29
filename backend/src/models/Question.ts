@@ -6,6 +6,7 @@ export interface IQuestion extends Document {
     isAnonymous: boolean;
     status: 'pending' | 'answered_ai' | 'answered_teacher';
     complexity: number;
+    cognitiveLevel?: string;
     aiSuggestedAnswer?: string;
     category?: string;
 }
@@ -16,6 +17,7 @@ const QuestionSchema: Schema = new Schema({
     isAnonymous: { type: Boolean, default: false },
     status: { type: String, enum: ['pending', 'answered_ai', 'answered_teacher'], default: 'pending' },
     complexity: { type: Number, default: 0 },
+    cognitiveLevel: { type: String },
     aiSuggestedAnswer: { type: String },
     category: { type: String }
 }, { timestamps: true });

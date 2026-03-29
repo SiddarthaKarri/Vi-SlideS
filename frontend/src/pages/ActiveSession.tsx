@@ -47,6 +47,10 @@ export default function ActiveSession() {
     };
   }, [code]);
 
+  const handleMarkAnswered = (questionId: string) => {
+    setQuestions(prev => prev.filter((q: any) => (q.id || q._id) !== questionId));
+  };
+
   const handleNextSlide = () => {
     if (currentSlide < totalSlides) {
       const next = currentSlide + 1;
@@ -231,7 +235,12 @@ export default function ActiveSession() {
                     <p className="text-gray-800 text-sm leading-relaxed font-medium">{q.question}</p>
                     <div className="mt-3 pt-3 border-t border-gray-50 flex items-center justify-between">
                        <span className="text-[10px] text-gray-400">AI Complexity: <strong>{q.complexity}/5</strong></span>
-                       <button className="text-[10px] font-bold text-indigo-600 hover:underline">Mark Answered</button>
+                       <button 
+                         onClick={() => handleMarkAnswered(q.id || q._id)}
+                         className="text-[10px] font-bold text-indigo-600 hover:text-indigo-800 uppercase tracking-tighter"
+                       >
+                         Mark Answered
+                       </button>
                     </div>
                   </div>
                 ))}

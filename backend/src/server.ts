@@ -117,6 +117,33 @@ io.on('connection', (socket) => {
         }
     });
 
+    socket.on('teacher_reply', async (data) => {
+        console.log(`Teacher replied to question ${data.questionId} in session ${data.sessionCode}`);
+        try {
+            let updatedQuestion;
+            if (process.env.USE_MOCK_DB === 'true') {
+                updatedQuestion = await mockStore.updateQuestion(data.questionId, {
+                    status: 'answered_teacher',
+                    aiSuggestedAnswer: data.answer // We can store the teacher answer in the existing aiSuggestedAnswer field or add a new field. Wait, Question model doesn't have teacherAnswer field. Let's use aiSuggestedAnswer or just rely on the frontend broadcast.
+                });
+            } else {
+                updatedQuestion = await Question.findByIdAndUpdate(
+                    data.questionId,
+                    { status: 'answered_teacher', aiSuggestedAnswer: data.answer },
+                    { new: true }
+                );
+            }
+            if (updatedQuestion) {
+                 io.to(data.sessionCode).emit('receive_teacher_reply', {
+                     questionId: updatedQuestion._id ? updatedQuestion._id.toString() : updatedQuestion.id,
+                     answer: data.answer
+                 });
+            }
+        } catch (error) {
+            console.error('Error saving teacher reply:', error);
+        }
+    });
+
     socket.on('slide_update', (data) => {
         console.log(`Slide update for session ${data.sessionCode}: Slide ${data.slideIndex}`);
         socket.to(data.sessionCode).emit('receive_slide_update', { slideIndex: data.slideIndex });

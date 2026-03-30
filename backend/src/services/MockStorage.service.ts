@@ -62,6 +62,16 @@ class MockStorage {
     async findQuestionsBySession(sessionCode: string): Promise<any[]> {
         return Array.from(this.questions.values()).filter(q => q.sessionCode === sessionCode);
     }
+
+    async updateQuestion(id: string, updates: any): Promise<any> {
+        const question = this.questions.get(id) || Array.from(this.questions.values()).find(q => q._id === id);
+        if (question) {
+            const updated = { ...question, ...updates };
+            this.questions.set(question.id, updated);
+            return updated;
+        }
+        return null;
+    }
 }
 
 export const mockStore = new MockStorage();

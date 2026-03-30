@@ -15,8 +15,9 @@ export default function ActiveSession() {
   const navigate = useNavigate();
   
   const [studentsJoined, setStudentsJoined] = useState(0);
-  const [questions, setQuestions] = useState<Question[]>([]);
+  const [questions, setQuestions] = useState<any[]>([]);
   const [socket, setSocket] = useState<Socket | null>(null);
+  const [replyTexts, setReplyTexts] = useState<Record<string, string>>({});
   
   // Slide Management
   const [currentSlide, setCurrentSlide] = useState(1);
@@ -24,6 +25,16 @@ export default function ActiveSession() {
   const [newQuestionNotif, setNewQuestionNotif] = useState(false);
 
   useEffect(() => {
+    if (code) {
+      fetch(`http://localhost:5000/api/questions/${code}`)
+        .then(res => res.json())
+        .then(data => {
+            const pending = data.filter((q: any) => q.status === 'pending');
+            setQuestions(pending);
+        })
+        .catch(err => console.error('Failed to fetch questions:', err));
+    }
+
     const newSocket = io('http://localhost:5000');
     setSocket(newSocket);
 
@@ -49,6 +60,19 @@ export default function ActiveSession() {
 
   const handleMarkAnswered = (questionId: string) => {
     setQuestions(prev => prev.filter((q: any) => (q.id || q._id) !== questionId));
+  };
+
+  const handleReplySubmit = (questionId: string) => {
+    const reply = replyTexts[questionId];
+    if (!reply || !reply.trim() || !socket) return;
+    socket.emit('teacher_reply', {
+        questionId,
+        answer: reply,
+        sessionCode: code
+    });
+    // Clear the reply input and remove from list
+    setReplyTexts(prev => { const next = {...prev}; delete next[questionId]; return next; });
+    handleMarkAnswered(questionId);
   };
 
   const handleNextSlide = () => {
@@ -233,13 +257,34 @@ export default function ActiveSession() {
                        </span>
                     </div>
                     <p className="text-gray-800 text-sm leading-relaxed font-medium">{q.question}</p>
+                    
+                    <div className="mt-3">
+                      <div className="flex items-center gap-2">
+                        <input 
+                          type="text" 
+                          placeholder="Type reply..." 
+                          value={replyTexts[q.id || q._id] || ''}
+                          onChange={(e) => setReplyTexts(prev => ({ ...prev, [q.id || q._id]: e.target.value }))}
+                          onKeyDown={(e) => e.key === 'Enter' && handleReplySubmit(q.id || q._id)}
+                          className="flex-1 text-xs border border-gray-300 rounded px-2 py-1.5 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                        />
+                        <button 
+                          onClick={() => handleReplySubmit(q.id || q._id)}
+                          disabled={!replyTexts[q.id || q._id]?.trim()}
+                          className="bg-indigo-600 text-white text-xs px-2 py-1.5 rounded hover:bg-indigo-700 disabled:opacity-50 min-w-[50px] font-medium"
+                        >
+                          Reply
+                        </button>
+                      </div>
+                    </div>
+
                     <div className="mt-3 pt-3 border-t border-gray-50 flex items-center justify-between">
                        <span className="text-[10px] text-gray-400">AI Complexity: <strong>{q.complexity}/5</strong></span>
                        <button 
                          onClick={() => handleMarkAnswered(q.id || q._id)}
-                         className="text-[10px] font-bold text-indigo-600 hover:text-indigo-800 uppercase tracking-tighter"
+                         className="text-[10px] font-bold text-gray-500 hover:text-gray-700 uppercase tracking-tighter"
                        >
-                         Mark Answered
+                         Dismiss
                        </button>
                     </div>
                   </div>

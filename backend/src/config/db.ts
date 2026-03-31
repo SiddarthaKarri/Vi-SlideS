@@ -6,7 +6,11 @@ const connectDB = async () => {
         console.log(`MongoDB Connected: ${conn.connection.host}`);
     } catch (error) {
         console.error(`Error: ${(error as Error).message}`);
-        process.exit(1);
+        if (process.env.USE_MOCK_DB !== 'true') {
+            process.exit(1);
+        } else {
+            console.log('Mock Mode Active: Continuing without MongoDB...');
+        }
     }
 };
 

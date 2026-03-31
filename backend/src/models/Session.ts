@@ -1,6 +1,7 @@
 import mongoose, { Schema, Document } from 'mongoose';
 
 export interface ISession extends Document {
+    id?: string;
     teacherId: mongoose.Types.ObjectId;
     sessionCode: string;
     isActive: boolean;

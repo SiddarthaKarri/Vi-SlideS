@@ -1,6 +1,7 @@
 import mongoose, { Schema, Document } from 'mongoose';
 
 export interface IQuestion extends Document {
+    id?: string;
     sessionCode: string;
     question: string;
     isAnonymous: boolean;

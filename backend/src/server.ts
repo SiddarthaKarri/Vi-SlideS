@@ -9,6 +9,7 @@ import sessionRoutes from './routes/sessionRoutes';
 import aiRoutes from './routes/ai.routes';
 import { analyzeQuestionPrompt } from './services/ai.service';
 import Question from './models/Question';
+import { mockStore } from './services/MockStorage.service';
 
 dotenv.config();
 
@@ -34,6 +35,11 @@ app.use('/api/ai', aiRoutes);
 // Sprint 3 Question route (GET)
 app.get('/api/questions/:sessionCode', async (req, res) => {
     try {
+        if (process.env.USE_MOCK_DB === 'true') {
+            const questions = await mockStore.findQuestionsBySession(req.params.sessionCode);
+            res.json(questions);
+            return;
+        }
         const questions = await Question.find({ sessionCode: req.params.sessionCode }).sort('-createdAt');
         res.json(questions);
     } catch (error) {
@@ -64,16 +70,29 @@ io.on('connection', (socket) => {
             const analysis = await analyzeQuestionPrompt(data.question);
             const isAutoAnswerable = analysis && analysis.complexity <= 3;
 
-            // 2. Save Question to Database (Member 3 CRUD Layer)
-            const savedQuestion = await Question.create({
-                sessionCode: data.sessionCode,
-                question: data.question,
-                isAnonymous: data.isAnonymous,
-                complexity: analysis?.complexity || 5,
-                category: analysis?.category || 'General',
-                aiSuggestedAnswer: analysis?.suggestedAnswer || '',
-                status: isAutoAnswerable ? 'answered_ai' : 'pending'
-            });
+            // 2. Save Question
+            let savedQuestion;
+            if (process.env.USE_MOCK_DB === 'true') {
+                savedQuestion = await mockStore.createQuestion({
+                    sessionCode: data.sessionCode,
+                    question: data.question,
+                    isAnonymous: data.isAnonymous,
+                    complexity: analysis?.complexity || 5,
+                    category: analysis?.category || 'General',
+                    aiSuggestedAnswer: analysis?.suggestedAnswer || '',
+                    status: isAutoAnswerable ? 'answered_ai' : 'pending'
+                });
+            } else {
+                savedQuestion = await Question.create({
+                    sessionCode: data.sessionCode,
+                    question: data.question,
+                    isAnonymous: data.isAnonymous,
+                    complexity: analysis?.complexity || 5,
+                    category: analysis?.category || 'General',
+                    aiSuggestedAnswer: analysis?.suggestedAnswer || '',
+                    status: isAutoAnswerable ? 'answered_ai' : 'pending'
+                });
+            }
 
             // 3. Smart Routing: Only broadcast complex questions to teacher's view!
             if (!isAutoAnswerable) {
@@ -96,6 +115,38 @@ io.on('connection', (socket) => {
         } catch (error) {
             console.error('Error processing question via socket:', error);
         }
+    });
+
+    socket.on('teacher_reply', async (data) => {
+        console.log(`Teacher replied to question ${data.questionId} in session ${data.sessionCode}`);
+        try {
+            let updatedQuestion;
+            if (process.env.USE_MOCK_DB === 'true') {
+                updatedQuestion = await mockStore.updateQuestion(data.questionId, {
+                    status: 'answered_teacher',
+                    aiSuggestedAnswer: data.answer // We can store the teacher answer in the existing aiSuggestedAnswer field or add a new field. Wait, Question model doesn't have teacherAnswer field. Let's use aiSuggestedAnswer or just rely on the frontend broadcast.
+                });
+            } else {
+                updatedQuestion = await Question.findByIdAndUpdate(
+                    data.questionId,
+                    { status: 'answered_teacher', aiSuggestedAnswer: data.answer },
+                    { new: true }
+                );
+            }
+            if (updatedQuestion) {
+                 io.to(data.sessionCode).emit('receive_teacher_reply', {
+                     questionId: updatedQuestion._id ? updatedQuestion._id.toString() : updatedQuestion.id,
+                     answer: data.answer
+                 });
+            }
+        } catch (error) {
+            console.error('Error saving teacher reply:', error);
+        }
+    });
+
+    socket.on('slide_update', (data) => {
+        console.log(`Slide update for session ${data.sessionCode}: Slide ${data.slideIndex}`);
+        socket.to(data.sessionCode).emit('receive_slide_update', { slideIndex: data.slideIndex });
     });
 
     socket.on('disconnect', () => {

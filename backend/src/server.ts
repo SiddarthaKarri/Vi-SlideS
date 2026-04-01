@@ -82,8 +82,8 @@ io.on('connection', (socket) => {
                     question: data.question,
                     answer: analysis.suggestedAnswer
                 });
-                // Broadcast to Teacher's screen
-                io.to(data.sessionCode).emit('receive_question', {
+                // Broadcast to Teacher's screen and others, excluding the sender
+                socket.to(data.sessionCode).emit('receive_question', {
                     id: savedQuestion._id.toString(),
                     tempId: data.tempId,
                     question: savedQuestion.question,

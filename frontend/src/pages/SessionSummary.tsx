@@ -25,13 +25,19 @@ export default function SessionSummary() {
   useEffect(() => {
     const fetchAnalytics = async () => {
       try {
-        const metRes = await fetch(`http://localhost:5000/api/analytics/${code}`);
+        const token = localStorage.getItem('token');
+        const headers = {
+            'Content-Type': 'application/json',
+            ...(token && { 'Authorization': `Bearer ${token}` })
+        };
+
+        const metRes = await fetch(`http://localhost:5000/api/analytics/${code}`, { headers });
         if (metRes.ok) {
             const metData = await metRes.json();
             setMetrics(metData);
         }
 
-        const moodRes = await fetch(`http://localhost:5000/api/analytics/${code}/mood`, { method: 'POST' });
+        const moodRes = await fetch(`http://localhost:5000/api/analytics/${code}/mood`, { method: 'POST', headers });
         if (moodRes.ok) {
             const moodObj = await moodRes.json();
             setMoodData({ mood: moodObj.mood, summary: moodObj.summary });

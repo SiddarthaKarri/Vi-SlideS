@@ -55,3 +55,37 @@ export const joinSession = async (req: Request, res: Response): Promise<void> =>
         res.status(500).json({ message: 'Error joining session' });
     }
 };
+
+// @route PUT /api/sessions/:sessionCode/status
+// @desc Update session status (active, paused, ended)
+export const updateSessionStatus = async (req: Request, res: Response): Promise<void> => {
+    try {
+        const { sessionCode } = req.params;
+        const { status } = req.body; // 'active', 'paused', 'ended'
+
+        if (!['active', 'paused', 'ended'].includes(status)) {
+            res.status(400).json({ message: 'Invalid status' });
+            return;
+        }
+
+        if (process.env.USE_MOCK_DB === 'true') {
+            res.status(200).json({ message: 'Status updated (mock)' });
+            return;
+        }
+
+        const session = await Session.findOneAndUpdate(
+            { sessionCode },
+            { status, isActive: status !== 'ended' },
+            { new: true }
+        );
+
+        if (!session) {
+            res.status(404).json({ message: 'Session not found' });
+            return;
+        }
+
+        res.status(200).json(session);
+    } catch (error) {
+        res.status(500).json({ message: 'Error updating session status' });
+    }
+};

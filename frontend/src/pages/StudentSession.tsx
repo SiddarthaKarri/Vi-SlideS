@@ -24,6 +24,7 @@ export default function StudentSession() {
   const [questions, setQuestions] = useState<QuestionData[]>([]);
   const [currentSlide, setCurrentSlide] = useState(1);
   const [escalatingIds, setEscalatingIds] = useState<Set<string>>(new Set());
+  const [sessionStatus, setSessionStatus] = useState<'active' | 'paused' | 'ended'>('active');
 
   useEffect(() => {
     const fetchQuestions = async () => {
@@ -35,7 +36,23 @@ export default function StudentSession() {
         }
       } catch (err) {}
     };
+    
+    const fetchSessionInfo = async () => {
+      try {
+        const response = await fetch(`http://localhost:5000/api/sessions/join`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ sessionCode: code })
+        });
+        if (response.ok) {
+          const data = await response.json();
+          setSessionStatus(data.status || 'active');
+        }
+      } catch (err) {}
+    };
+
     fetchQuestions();
+    fetchSessionInfo();
 
     const newSocket = io('http://localhost:5000', { reconnectionAttempts: 10, reconnectionDelay: 2000 });
     setSocket(newSocket);
@@ -50,6 +67,13 @@ export default function StudentSession() {
 
     newSocket.on('slide_update', (data) => {
         setCurrentSlide(data.slideIndex);
+    });
+
+    newSocket.on('session_status_change', (data) => {
+        setSessionStatus(data.status);
+        if (data.status === 'ended') {
+            navigate('/join-class');
+        }
     });
 
     newSocket.on('receive_question', (data) => {
@@ -165,10 +189,11 @@ export default function StudentSession() {
           <form onSubmit={handleSubmit} className="space-y-4">
             <textarea
               rows={4}
-              className="w-full border border-gray-300 rounded-md p-3 outline-none resize-none focus:ring-2 focus:ring-indigo-500"
-              placeholder="Type your question here..."
+              className="w-full border border-gray-300 rounded-md p-3 outline-none resize-none focus:ring-2 focus:ring-indigo-500 disabled:bg-gray-100 disabled:opacity-75"
+              placeholder={sessionStatus === 'paused' ? "Session paused..." : "Type your question here..."}
               value={question}
               onChange={(e) => setQuestion(e.target.value)}
+              disabled={sessionStatus === 'paused'}
               required
             />
 
@@ -177,12 +202,22 @@ export default function StudentSession() {
                 <input type="checkbox" className="h-4 w-4 text-indigo-600 rounded" checked={isAnonymous} onChange={(e) => setIsAnonymous(e.target.checked)} />
                 <label className="ml-2 text-sm text-gray-900">Anonymous</label>
               </div>
-
-              <button type="submit" disabled={submitting || !question.trim()} className="px-4 py-2 rounded-md font-medium text-white bg-indigo-600 hover:bg-indigo-700 disabled:bg-indigo-400 flex items-center">
-                {submitting ? 'Triage...' : 'Send'} <Send className="ml-2 h-4 w-4" />
-              </button>
+              <div className="flex justify-end mt-4 sm:mt-0">
+                <button 
+                  type="submit" 
+                  disabled={submitting || sessionStatus === 'paused'}
+                  className="bg-indigo-600 text-white font-medium py-2 px-6 rounded-lg hover:bg-indigo-700 transition flex items-center justify-center disabled:opacity-50"
+                >
+                  {submitting ? 'Sending...' : <><Send className="w-4 h-4 mr-2" /> Send</>}
+                </button>
+              </div>
             </div>
-            {statusMsg && (
+
+            {sessionStatus === 'paused' && (
+              <div className="bg-amber-100 text-amber-800 p-3 rounded-lg text-sm text-center font-medium animate-pulse border border-amber-200 mt-4 shadow-sm">
+                  Teacher has paused question submissions.
+              </div>
+            )}{statusMsg && (
               <div className="mt-4 p-3 text-sm rounded flex items-center shadow-sm bg-indigo-50 text-indigo-700 border border-indigo-200">
                 <AlertCircle className="h-5 w-5 mr-2" /> <span>{statusMsg}</span>
               </div>

@@ -3,11 +3,11 @@ import Landing from './pages/Landing';
 import TeacherAuth from './pages/TeacherAuth';
 import Dashboard from './pages/Dashboard';
 import ActiveSession from './pages/ActiveSession';
-import SessionSummary from './pages/SessionSummary';
 import StudentLogin from './pages/StudentLogin';
 import StudentRegister from './pages/StudentRegister';
 import JoinClassDashboard from './pages/JoinClassDashboard';
 import StudentSession from './pages/StudentSession';
+import SessionSummary from './pages/SessionSummary';
 
 function App() {
   return (
@@ -19,7 +19,7 @@ function App() {
         <Route path="/teacher-login" element={<TeacherAuth />} />
         <Route path="/teacher-dashboard" element={<Dashboard />} />
         <Route path="/teacher-session/:code" element={<ActiveSession />} />
-        <Route path="/session-summary/:code" element={<SessionSummary />} />
+        <Route path="/summary/:code" element={<SessionSummary />} />
         
         {/* Student Routes */}
         <Route path="/student-login" element={<StudentLogin />} />

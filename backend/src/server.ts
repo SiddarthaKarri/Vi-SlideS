@@ -54,7 +54,7 @@ io.on('connection', (socket) => {
             // Start triage
             const analysis = await analyzeQuestionPrompt(data.question);
             // stricter threshold so AI doesn't gobble up all questions
-            const isAutoAnswerable = analysis && analysis.complexity <= 2; 
+            const isAutoAnswerable = analysis && analysis.complexity <= 4;
 
             const savedQuestion = await Question.create({
                 sessionCode: data.sessionCode,
@@ -77,10 +77,10 @@ io.on('connection', (socket) => {
                 });
             } else {
                 socket.emit('auto_answer', {
-                   questionId: savedQuestion._id.toString(),
-                   tempId: data.tempId,
-                   question: data.question,
-                   answer: analysis.suggestedAnswer
+                    questionId: savedQuestion._id.toString(),
+                    tempId: data.tempId,
+                    question: data.question,
+                    answer: analysis.suggestedAnswer
                 });
                 // Broadcast to Teacher's screen
                 io.to(data.sessionCode).emit('receive_question', {
@@ -103,11 +103,15 @@ io.on('connection', (socket) => {
         io.to(data.sessionCode).emit('slide_update', data);
     });
 
+    socket.on('session_status_change', (data) => {
+        io.to(data.sessionCode).emit('session_status_change', data);
+    });
+
     socket.on('escalate_question', async (data) => {
         try {
             await Question.findByIdAndUpdate(data.questionId, { status: 'pending' });
             const q = await Question.findById(data.questionId);
-            if(q) {
+            if (q) {
                 // Forward to teacher
                 io.to(q.sessionCode).emit('receive_question', {
                     id: q._id.toString(),
@@ -123,7 +127,7 @@ io.on('connection', (socket) => {
     socket.on('request_ai_answer', async (data) => {
         try {
             const q = await Question.findById(data.questionId);
-            if(q) {
+            if (q) {
                 const analysis = await analyzeQuestionPrompt(q.question);
                 socket.emit('ai_assist_result', { questionId: data.questionId, answer: analysis?.suggestedAnswer || '' });
             }

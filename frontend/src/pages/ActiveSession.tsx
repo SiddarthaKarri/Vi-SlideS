@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { Users, Hand, ArrowLeft, Presentation, Share2, MessageSquare, ChevronRight, Sparkles } from 'lucide-react';
+import { Users, Hand, ArrowLeft, Presentation, Share2, MessageSquare, ChevronRight, Sparkles, Pause, Play, StopCircle } from 'lucide-react';
 import { io, Socket } from 'socket.io-client';
 
 interface Question {
@@ -25,14 +25,15 @@ export default function ActiveSession() {
   const [currentSlide, setCurrentSlide] = useState(1);
   const totalSlides = 10; // Simulated slide deck
   const [newQuestionNotif, setNewQuestionNotif] = useState(false);
+  const [sessionStatus, setSessionStatus] = useState<'active' | 'paused' | 'ended'>('active');
 
   useEffect(() => {
     if (code) {
       fetch(`http://localhost:5000/api/questions/${code}`)
         .then(res => res.json())
         .then(data => {
-            const visible = data.filter((q: any) => q.status === 'pending' || q.status === 'answered_ai');
-            setQuestions(visible);
+            const pending = data.filter((q: any) => q.status === 'pending');
+            setQuestions(pending);
         })
         .catch(err => console.error('Failed to fetch questions:', err));
     }
@@ -105,6 +106,37 @@ export default function ActiveSession() {
     }
   };
 
+  const handleTogglePause = async () => {
+    const newStatus = sessionStatus === 'active' ? 'paused' : 'active';
+    try {
+       await fetch(`http://localhost:5000/api/sessions/${code}/status`, {
+           method: 'PUT',
+           headers: { 'Content-Type': 'application/json' },
+           body: JSON.stringify({ status: newStatus })
+       });
+       setSessionStatus(newStatus);
+       socket?.emit('session_status_change', { sessionCode: code, status: newStatus });
+    } catch (e) {
+       console.error("Failed to toggle pause", e);
+    }
+  };
+
+  const handleEndSession = async () => {
+    if(!window.confirm("Are you sure you want to end this session? Students will be disconnected.")) return;
+    try {
+       await fetch(`http://localhost:5000/api/sessions/${code}/status`, {
+           method: 'PUT',
+           headers: { 'Content-Type': 'application/json' },
+           body: JSON.stringify({ status: 'ended' })
+       });
+       setSessionStatus('ended');
+       socket?.emit('session_status_change', { sessionCode: code, status: 'ended' });
+       navigate(`/summary/${code}`);
+    } catch (e) {
+       console.error("Failed to end session", e);
+    }
+  };
+
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col text-gray-900 font-sans">
       {/* Session Header */}
@@ -123,7 +155,9 @@ export default function ActiveSession() {
               Live Session
             </h1>
             <div className="flex items-center gap-2 mt-1 -ml-1">
-              <span className="px-2 py-0.5 rounded-md bg-indigo-50 text-xs text-indigo-700 font-medium uppercase tracking-widest border border-indigo-200">Class Active</span>
+              <span className={`px-2 py-0.5 rounded-md text-xs font-bold uppercase tracking-widest border ${sessionStatus === 'active' ? 'bg-indigo-50 text-indigo-700 border-indigo-200' : 'bg-amber-50 text-amber-700 border-amber-500 animate-pulse'}`}>
+                {sessionStatus === 'active' ? 'Class Active' : 'Class Paused'}
+              </span>
             </div>
           </div>
         </div>
@@ -145,12 +179,22 @@ export default function ActiveSession() {
             <Users className="w-5 h-5 text-emerald-600" />
             <span className="font-medium text-emerald-600">{studentsJoined} <span className="text-gray-500">Joined</span></span>
           </div>
-          <button 
-             onClick={() => { socket?.disconnect(); navigate(`/session-summary/${code}`); }} 
-             className="bg-red-50 hover:bg-red-100 text-red-600 font-bold px-4 py-2 rounded-xl border border-red-200 uppercase tracking-widest text-xs transition-colors"
-          >
-             End Session
-          </button>
+
+          <div className="flex items-center gap-2 border-l border-gray-200 pl-6 h-10">
+            <button 
+                onClick={handleTogglePause} 
+                className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold uppercase tracking-wide rounded-lg transition-colors ${sessionStatus === 'active' ? 'bg-amber-100 text-amber-700 hover:bg-amber-200' : 'bg-emerald-100 text-emerald-700 hover:bg-emerald-200 ring-2 ring-emerald-400 ring-offset-1'}`}
+            >
+               {sessionStatus === 'active' ? <Pause className="w-3.5 h-3.5" /> : <Play className="w-3.5 h-3.5" />}
+               {sessionStatus === 'active' ? 'Pause' : 'Resume'}
+            </button>
+            <button 
+                onClick={handleEndSession} 
+                className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold uppercase tracking-wide rounded-lg bg-red-600 text-white hover:bg-red-700 transition-colors shadow-sm"
+            >
+               <StopCircle className="w-3.5 h-3.5" /> End Session
+            </button>
+          </div>
         </div>
       </header>
 
@@ -278,13 +322,6 @@ export default function ActiveSession() {
                     </div>
                     <p className="text-gray-800 text-sm leading-relaxed font-medium">{q.question}</p>
                     
-                    {q.status === 'answered_ai' && q.aiSuggestedAnswer && (
-                       <div className="mt-3 bg-indigo-50/50 p-3 rounded-md border border-indigo-100">
-                         <p className="text-xs font-bold text-indigo-800 flex items-center gap-1"><Sparkles className="w-3 h-3"/> AI Auto-Answered:</p>
-                         <p className="text-sm text-indigo-900 mt-1 font-medium">{q.aiSuggestedAnswer}</p>
-                       </div>
-                    )}
-
                     <div className="mt-3">
                       <div className="flex justify-between items-center mb-2">
                           <button 
@@ -314,7 +351,7 @@ export default function ActiveSession() {
                     </div>
 
                     <div className="mt-3 pt-3 border-t border-gray-50 flex items-center justify-between">
-                       <span className="text-[10px] text-gray-400">AI Complexity: <strong>{q.complexity}/5</strong></span>
+                       <span className="text-[10px] text-gray-400">AI Complexity: <strong>{q.complexity}/10</strong></span>
                        <button 
                          onClick={() => handleMarkAnswered(q.id || q._id)}
                          className="text-[10px] font-bold text-gray-500 hover:text-gray-700 uppercase tracking-tighter"

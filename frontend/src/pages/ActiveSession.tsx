@@ -1,13 +1,15 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { Users, Hand, ArrowLeft, Presentation, Share2, MessageSquare, ChevronRight } from 'lucide-react';
+import { Users, Hand, ArrowLeft, Presentation, Share2, MessageSquare, ChevronRight, Sparkles } from 'lucide-react';
 import { io, Socket } from 'socket.io-client';
 
 interface Question {
   id: string;
+  _id?: string;
   question: string;
   isAnonymous: boolean;
   timestamp: string;
+  complexity?: number;
 }
 
 export default function ActiveSession() {
@@ -29,8 +31,8 @@ export default function ActiveSession() {
       fetch(`http://localhost:5000/api/questions/${code}`)
         .then(res => res.json())
         .then(data => {
-            const pending = data.filter((q: any) => q.status === 'pending');
-            setQuestions(pending);
+            const visible = data.filter((q: any) => q.status === 'pending' || q.status === 'answered_ai');
+            setQuestions(visible);
         })
         .catch(err => console.error('Failed to fetch questions:', err));
     }
@@ -43,14 +45,21 @@ export default function ActiveSession() {
     }
 
     newSocket.on('receive_question', (data: Question) => {
-        setQuestions((prev) => [data, ...prev]);
+        setQuestions((prev) => {
+           // Prevent duplicates if already in list
+           if (prev.some(q => (q.id || q._id) === (data.id || data._id))) return prev;
+           return [data, ...prev];
+        });
         setNewQuestionNotif(true);
-        setTimeout(() => setNewQuestionNotif(false), 3000); // Clear notification after 3s
+        setTimeout(() => setNewQuestionNotif(false), 3000); 
     });
 
     newSocket.on('member_count', (count: number) => {
-        // Assuming 1 teacher is in the room, subtract 1 to get student count
         setStudentsJoined(Math.max(0, count - 1));
+    });
+
+    newSocket.on('ai_assist_result', (data) => {
+        setReplyTexts(prev => ({ ...prev, [data.questionId]: data.answer }));
     });
 
     return () => {
@@ -73,6 +82,11 @@ export default function ActiveSession() {
     // Clear the reply input and remove from list
     setReplyTexts(prev => { const next = {...prev}; delete next[questionId]; return next; });
     handleMarkAnswered(questionId);
+  };
+
+  const handleAIAssist = (questionId: string) => {
+      setReplyTexts(prev => ({ ...prev, [questionId]: "Generating AI Draft..." }));
+      socket?.emit('request_ai_answer', { questionId });
   };
 
   const handleNextSlide = () => {
@@ -131,6 +145,12 @@ export default function ActiveSession() {
             <Users className="w-5 h-5 text-emerald-600" />
             <span className="font-medium text-emerald-600">{studentsJoined} <span className="text-gray-500">Joined</span></span>
           </div>
+          <button 
+             onClick={() => { socket?.disconnect(); navigate(`/session-summary/${code}`); }} 
+             className="bg-red-50 hover:bg-red-100 text-red-600 font-bold px-4 py-2 rounded-xl border border-red-200 uppercase tracking-widest text-xs transition-colors"
+          >
+             End Session
+          </button>
         </div>
       </header>
 
@@ -232,33 +252,48 @@ export default function ActiveSession() {
               <div className="w-full space-y-4">
                 {questions.map((q: any) => (
                   <div 
-                    key={q.id} 
+                    key={q.id || q._id} 
                     className={`bg-white border p-4 rounded-xl shadow-sm text-left transition-all border-l-4 ${
-                      q.complexity >= 4 ? 'border-l-red-500 ring-1 ring-red-50 ring-inset' : 
-                      q.complexity >= 3 ? 'border-l-amber-500' : 
+                      (q.complexity || 0) >= 4 ? 'border-l-red-500 ring-1 ring-red-50 ring-inset' : 
+                      (q.complexity || 0) >= 3 ? 'border-l-amber-500' : 
                       'border-l-emerald-500'
                     }`}
                   >
                     <div className="flex justify-between items-start mb-2">
                        <div className="flex items-center gap-2">
                          <span className={`text-[10px] font-bold uppercase tracking-widest ${
-                            q.complexity >= 4 ? 'text-red-600' : 'text-indigo-600'
+                            (q.complexity || 0) >= 4 ? 'text-red-600' : 'text-indigo-600'
                          }`}>
                            {q.isAnonymous ? 'Anonymous' : 'Student'}
                          </span>
-                         {q.complexity >= 4 && (
+                         {(q.complexity || 0) >= 4 && (
                            <span className="animate-pulse flex items-center gap-1 bg-red-100 text-red-700 px-1.5 py-0.5 rounded text-[9px] font-black uppercase">
-                              Critical
+                               Critical
                            </span>
                          )}
                        </div>
                        <span className="text-xs text-gray-400">
-                         {new Date(q.timestamp).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
+                         {new Date(q.timestamp || q.createdAt).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
                        </span>
                     </div>
                     <p className="text-gray-800 text-sm leading-relaxed font-medium">{q.question}</p>
                     
+                    {q.status === 'answered_ai' && q.aiSuggestedAnswer && (
+                       <div className="mt-3 bg-indigo-50/50 p-3 rounded-md border border-indigo-100">
+                         <p className="text-xs font-bold text-indigo-800 flex items-center gap-1"><Sparkles className="w-3 h-3"/> AI Auto-Answered:</p>
+                         <p className="text-sm text-indigo-900 mt-1 font-medium">{q.aiSuggestedAnswer}</p>
+                       </div>
+                    )}
+
                     <div className="mt-3">
+                      <div className="flex justify-between items-center mb-2">
+                          <button 
+                            onClick={() => handleAIAssist(q.id || q._id)}
+                            className="bg-indigo-50 text-indigo-600 hover:bg-indigo-100 px-2 py-1 rounded text-[10px] font-bold uppercase tracking-widest flex items-center gap-1 transition-colors"
+                          >
+                            <Sparkles className="w-3 h-3" /> Auto-Draft AI Reply
+                          </button>
+                      </div>
                       <div className="flex items-center gap-2">
                         <input 
                           type="text" 
